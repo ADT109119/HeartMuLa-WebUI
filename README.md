@@ -113,4 +113,6 @@ FFmpeg 須使用 Shared 版本的二進位檔(如: `ffmpeg-release-full-shared.7
 
 ## 📝 授權
 
-請參閱[HeartMuLa](https://github.com/HeartMuLa/heartlib) [LICENSE](LICENSE) 檔案。
+本UI基於 Apache 2.0 協議授權，詳情請查看 [LICENSE](LICENSE)
+
+HeartMuLa 專案本體請參閱 [HeartMuLa](https://github.com/HeartMuLa/heartlib) LICENSE 檔案。
