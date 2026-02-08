@@ -10,6 +10,10 @@ import time
 import torch
 import gradio as gr
 from datetime import datetime
+try:
+    from transformers import BitsAndBytesConfig
+except ImportError:
+    BitsAndBytesConfig = None
 
 # Add the src directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
@@ -116,8 +120,12 @@ class ThrottledTqdmProgress:
                 result = super().update(n)
                 self._gradio_update_counter += n
                 
-                # Only update Gradio progress every N iterations
-                if self.total and self._gradio_update_counter >= update_interval:
+                # Determine effective update interval based on total steps
+                # Only throttle if total > 100 steps
+                effective_interval = update_interval if (self.total and self.total > 100) else 1
+                
+                # Update Gradio progress
+                if self.total and self._gradio_update_counter >= effective_interval:
                     current_progress = self.n / self.total
                     # Calculate speed
                     elapsed = self.format_dict.get('elapsed', 0)
@@ -172,6 +180,7 @@ def generate_music(
     mula_dtype: str,
     codec_dtype: str,
     lazy_load: bool,
+    quantize_4bit: bool,
     progress=gr.Progress(),
 ):
     """
@@ -190,6 +199,7 @@ def generate_music(
         mula_dtype: Data type for MuLa model
         codec_dtype: Data type for codec model
         lazy_load: Whether to use lazy loading
+        quantize_4bit: Whether to use 4-bit quantization
         progress: Gradio progress tracker
     
     Returns:
@@ -231,8 +241,34 @@ def generate_music(
         log(f"⚙️  參數: 長度={max_audio_length_sec}s, topk={topk}, temp={temperature}, cfg={cfg_scale}")
         log(f"🖥️  裝置: MuLa={mula_dev}, Codec={codec_dev}")
         log(f"📊 類型: MuLa={mula_dtype}, Codec={codec_dtype}")
-        log(f"💾 Lazy Load: {'啟用' if lazy_load else '停用'}")
+        log(f" Lazy Load: {'啟用' if lazy_load else '停用'}")
+        log(f"🤏 4-bit 量化: {'啟用' if quantize_4bit else '停用'}")
         log("-" * 50)
+        
+        # Configure 4-bit quantization
+        bnb_config = None
+        if quantize_4bit:
+            if not torch.cuda.is_available() or mula_dev.type != "cuda":
+                log("⚠️ 警告: 4-bit 量化需要 CUDA 裝置。已忽略此設定。")
+            elif BitsAndBytesConfig is None:
+                log("⚠️ 警告: 未安裝 transformers 或 bitsandbytes，無法使用 4-bit 量化。")
+            else:
+                quant_type = "nf4"
+                try:
+                    # Check for fp4 support (Compute Capability >= 8.9 for Ada Lovelace)
+                    major, _ = torch.cuda.get_device_capability(mula_dev)
+                    if major >= 10: 
+                        quant_type = "fp4"
+                except:
+                    pass
+
+                log(f"⚙️  啟用 4-bit 量化 (type: {quant_type})")
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type=quant_type,
+                    bnb_4bit_compute_dtype=torch.bfloat16,
+                    bnb_4bit_use_double_quant=True,
+                )
         
         # Create output directory
         os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -257,6 +293,7 @@ def generate_music(
             },
             version=model_version,
             lazy_load=lazy_load,
+            bnb_config=bnb_config,
         )
         log("✅ 模型載入完成")
         
@@ -460,6 +497,12 @@ def create_interface():
                     value=True,
                     info="啟用後模組將按需載入，可節省 GPU 記憶體",
                 )
+
+                quantize_4bit = gr.Checkbox(
+                    label="4-bit 量化 (需 CUDA)",
+                    value=False,
+                    info="啟用 4-bit 量化可大幅減少 VRAM 使用量 (僅支援 CUDA)",
+                )
                 
                 generate_btn = gr.Button("🎵 生成音樂", variant="primary", size="lg")
             
@@ -498,6 +541,7 @@ def create_interface():
                 mula_dtype,
                 codec_dtype,
                 lazy_load,
+                quantize_4bit,
             ],
             outputs=[audio_output, log_output],
         )
