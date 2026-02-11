@@ -16,7 +16,18 @@ if errorlevel 1 (
 )
 
 echo.
-echo [1/2] Downloading HeartMuLa-RL-oss-3B-20260123...
+echo [1/3] Downloading HeartMuLaGen configs...
+echo.
+.\python_embeded\python.exe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='HeartMuLa/HeartMuLaGen', local_dir='./ckpt')"
+
+if errorlevel 1 (
+    echo [ERROR] Failed to download HeartMuLaGen configs.
+    pause
+    exit /b 1
+)
+
+echo.
+echo [2/3] Downloading HeartMuLa-RL-oss-3B-20260123...
 echo.
 .\python_embeded\python.exe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='HeartMuLa/HeartMuLa-RL-oss-3B-20260123', local_dir='./ckpt/HeartMuLa-oss-3B')"
 
@@ -27,7 +38,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/2] Downloading HeartCodec-oss-20260123...
+echo [3/3] Downloading HeartCodec-oss-20260123...
 echo.
 .\python_embeded\python.exe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='HeartMuLa/HeartCodec-oss-20260123', local_dir='./ckpt/HeartCodec-oss')"
 
